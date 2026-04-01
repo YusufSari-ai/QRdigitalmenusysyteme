@@ -1,8 +1,8 @@
-// Skeleton shown while the menu data loads (spec §5.2 — CLS = 0)
+// Win2000-styled skeleton loader shown while menu data loads (spec §5.2 — CLS = 0)
 export default function SkeletonLoader() {
   return (
     <>
-      {/* Horizontal nav skeleton */}
+      {/* Win2000 tab-style nav skeleton */}
       <div className="skeleton-nav" aria-hidden="true">
         {[90, 70, 110, 80, 95].map((w, i) => (
           <div
@@ -19,7 +19,7 @@ export default function SkeletonLoader() {
           <div className="skeleton skeleton-section__header" />
           <div className="skeleton-grid">
             {[1, 2, 3, 4].map((c) => (
-              <div key={c} className="skeleton skeleton-card">
+              <div key={c} className="skeleton-card">
                 <div className="skeleton skeleton-card__name" />
                 <div className="skeleton skeleton-card__image" />
                 <div className="skeleton skeleton-card__price" />

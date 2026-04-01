@@ -15,13 +15,14 @@ function formatPrice(price: number): string {
 }
 
 // Display order per spec §6.2: Name → Image → Price
+// Styled as a Windows 2000 raised panel card
 export default function ProductCard({ product }: ProductCardProps) {
   return (
     <article className="product-card">
-      {/* 1. Product Name */}
+      {/* 1. Product Name — Win2000 title strip */}
       <h3 className="product-card__name">{product.name}</h3>
 
-      {/* 2. Product Image */}
+      {/* 2. Product Image — sunken bevel frame */}
       <div className="product-card__image-wrap">
         {product.image_url ? (
           <Image
@@ -40,8 +41,9 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
       </div>
 
-      {/* 3. Price */}
+      {/* 3. Price — Win2000 status bar style footer */}
       <div className="product-card__footer">
+        <span className="product-card__price-label">Price:</span>
         <span className="product-card__price">{formatPrice(product.price)}</span>
       </div>
     </article>

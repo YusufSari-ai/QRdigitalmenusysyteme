@@ -14,13 +14,28 @@ export default function MenuPage() {
     <Suspense
       fallback={
         <div className="menu-root">
-          <header className="menu-header">
-            <div>
-              <div className="menu-header__logo">Tart Cafe</div>
-              <div className="menu-header__subtitle">Our Selection</div>
+          <header className="menu-header" role="banner">
+            <div className="menu-header__titlebar-left">
+              <div className="menu-header__icon" aria-hidden="true">🍴</div>
+              <span className="menu-header__logo">Tart Cafe</span>
+              <span className="menu-header__subtitle">— Menu.exe</span>
+            </div>
+            <div className="menu-header__controls" aria-hidden="true">
+              <button className="menu-header__btn" tabIndex={-1}>_</button>
+              <button className="menu-header__btn" tabIndex={-1}>□</button>
+              <button className="menu-header__btn" tabIndex={-1}>✕</button>
             </div>
           </header>
-          <SkeletonLoader />
+          <nav className="menu-menubar" aria-label="Application menu bar">
+            <span className="menu-menubar__item">File</span>
+            <div className="menu-menubar__sep" />
+            <span className="menu-menubar__item">View</span>
+            <div className="menu-menubar__sep" />
+            <span className="menu-menubar__item">Help</span>
+          </nav>
+          <div className="menu-window">
+            <SkeletonLoader />
+          </div>
         </div>
       }
     >

@@ -7,8 +7,7 @@ interface CategorySectionProps {
 }
 
 // Each category is a section with its own anchor ID (spec §6.1)
-// Category header is sticky (spec §6.4)
-// Categories with zero products are filtered before reaching this component (spec §8)
+// Category header styled as Win2000 title bar strip
 export default function CategorySection({ category }: CategorySectionProps) {
   return (
     <section
@@ -16,22 +15,22 @@ export default function CategorySection({ category }: CategorySectionProps) {
       className="category-section"
       aria-labelledby={`category-title-${category.id}`}
     >
-      {/* Sticky header */}
+      {/* Win2000 mini title bar for each category */}
       <div className="category-header">
         <div className="category-header__image-wrap">
           {category.image_url ? (
             <Image
               src={category.image_url}
               alt={category.name}
-              width={44}
-              height={44}
+              width={20}
+              height={20}
               className="category-header__image"
               style={{ objectFit: "cover" }}
             />
           ) : (
-            <div className="product-card__placeholder" aria-hidden="true">
+            <span aria-hidden="true" style={{ fontSize: 12, lineHeight: "20px", textAlign: "center", display: "block" }}>
               🍴
-            </div>
+            </span>
           )}
         </div>
         <h2
