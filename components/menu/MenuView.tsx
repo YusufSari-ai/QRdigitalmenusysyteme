@@ -52,7 +52,7 @@ export default function MenuView() {
       <div className="menu-root">
         <header className="menu-header">
           <div>
-            <div className="menu-header__logo">Digital Menu</div>
+            <div className="menu-header__logo">Tart Cafe</div>
             <div className="menu-header__subtitle">Our Selection</div>
           </div>
         </header>
@@ -67,7 +67,7 @@ export default function MenuView() {
       <div className="menu-root">
         <header className="menu-header">
           <div>
-            <div className="menu-header__logo">Digital Menu</div>
+            <div className="menu-header__logo">Tart Cafe</div>
             <div className="menu-header__subtitle">Our Selection</div>
           </div>
         </header>
@@ -82,7 +82,7 @@ export default function MenuView() {
       <div className="menu-root">
         <header className="menu-header">
           <div>
-            <div className="menu-header__logo">Digital Menu</div>
+            <div className="menu-header__logo">Tart Cafe</div>
             <div className="menu-header__subtitle">Our Selection</div>
           </div>
         </header>
@@ -96,7 +96,7 @@ export default function MenuView() {
     <div className="menu-root">
       <header className="menu-header">
         <div>
-          <div className="menu-header__logo">Digital Menu</div>
+          <div className="menu-header__logo">Tart Cafe</div>
           <div className="menu-header__subtitle">Our Selection</div>
         </div>
       </header>
