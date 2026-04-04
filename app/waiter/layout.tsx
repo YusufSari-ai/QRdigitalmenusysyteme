@@ -1,0 +1,14 @@
+import { redirect } from "next/navigation";
+import { hasRole } from "@/lib/adminAuth";
+
+export default async function WaiterRouteLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const allowed = await hasRole(["super_admin", "waiter"]);
+  if (!allowed) {
+    redirect("/login?error=unauthorized");
+  }
+  return <>{children}</>;
+}
