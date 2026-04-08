@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import type { Product } from "@/types/product";
 import type { Category } from "@/types/category";
 import EmptyState from "@/components/ui/EmptyState";
+import MenuImage from "@/components/ui/MenuImage";
 
 interface ProductTableProps {
   products: Product[];
@@ -60,23 +60,22 @@ export default function ProductTable({
           {products.map((product) => (
             <tr key={product.id}>
               <td>
-                {product.image_url ? (
-                  <Image
-                    src={product.image_url}
-                    alt={product.name}
-                    width={44}
-                    height={44}
-                    className="table-thumbnail"
-                    style={{ objectFit: "cover" }}
-                  />
-                ) : (
-                  <div
-                    className="table-thumbnail-placeholder"
-                    aria-hidden="true"
-                  >
-                    🍽️
-                  </div>
-                )}
+                <MenuImage
+                  src={product.image_url}
+                  alt={product.name}
+                  width={44}
+                  height={44}
+                  className="table-thumbnail"
+                  style={{ objectFit: "cover" }}
+                  fallback={
+                    <div
+                      className="table-thumbnail-placeholder"
+                      aria-hidden="true"
+                    >
+                      🍽️
+                    </div>
+                  }
+                />
               </td>
               <td>
                 <span

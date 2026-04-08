@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import type { Category } from "@/types/category";
 import EmptyState from "@/components/ui/EmptyState";
+import MenuImage from "@/components/ui/MenuImage";
 
 interface CategoryTableProps {
   categories: Category[];
@@ -46,20 +46,19 @@ export default function CategoryTable({
           {categories.map((cat) => (
             <tr key={cat.id}>
               <td>
-                {cat.image_url ? (
-                  <Image
-                    src={cat.image_url}
-                    alt={cat.name}
-                    width={44}
-                    height={44}
-                    className="table-thumbnail"
-                    style={{ objectFit: "cover" }}
-                  />
-                ) : (
-                  <div className="table-thumbnail-placeholder" aria-hidden="true">
-                    🍴
-                  </div>
-                )}
+                <MenuImage
+                  src={cat.image_url}
+                  alt={cat.name}
+                  width={44}
+                  height={44}
+                  className="table-thumbnail"
+                  style={{ objectFit: "cover" }}
+                  fallback={
+                    <div className="table-thumbnail-placeholder" aria-hidden="true">
+                      🍴
+                    </div>
+                  }
+                />
               </td>
               <td>
                 <strong className="truncate" style={{ maxWidth: 200, display: "block" }}>

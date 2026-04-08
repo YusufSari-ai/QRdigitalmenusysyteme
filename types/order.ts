@@ -21,6 +21,8 @@ export interface Order {
   order_no: string;
   status: OrderStatus;
   note: string | null;
+  is_ready: boolean;
+  is_paid: boolean;
   created_at: string;
   updated_at: string;
   closed_at: string | null;

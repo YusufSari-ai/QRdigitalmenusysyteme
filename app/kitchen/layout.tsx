@@ -6,9 +6,17 @@ export default async function KitchenRouteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const allowed = await hasRole(["super_admin", "kitchen"]);
+  let allowed = false;
+  try {
+    allowed = await hasRole(["super_admin", "kitchen"]);
+  } catch {
+    redirect("/login?error=session_expired");
+  }
+
   if (!allowed) {
     redirect("/login?error=unauthorized");
   }
-  return <>{children}</>;
+
+  return <div className="page-bg">{children}</div>;
 }
+

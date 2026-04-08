@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import type { Product } from "@/types/product";
+import { useCart } from "./CartContext";
+import MenuImage from "@/components/ui/MenuImage";
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("tr-TR", {
@@ -38,17 +38,17 @@ interface Props {
 }
 
 export default function WaiterProductCard({ product }: Props) {
-  const [count, setCount] = useState(0);
+  const { getCount, setCount } = useCart();
+  const count = getCount(product.id);
 
   const increment = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCount((c) => c + 1);
+    setCount(product, count + 1);
   };
 
   const decrement = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (count === 1) setCount(0);
-    else setCount((c) => c - 1);
+    setCount(product, count - 1);
   };
 
   return (
@@ -56,21 +56,19 @@ export default function WaiterProductCard({ product }: Props) {
       <h3 className="product-card__name">{product.name}</h3>
 
       <div className="product-card__image-wrap">
-        {product.image_url ? (
-          <Image
-            src={product.image_url}
-            alt={product.name}
-            fill
-            sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, 25vw"
-            className="product-card__image"
-            loading="lazy"
-            style={{ objectFit: "cover" }}
-          />
-        ) : (
-          <div className="product-card__placeholder" aria-hidden="true">
-            🍽️
-          </div>
-        )}
+        <MenuImage
+          src={product.image_url}
+          alt={product.name}
+          fill
+          sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, 25vw"
+          className="product-card__image"
+          style={{ objectFit: "cover" }}
+          fallback={
+            <div className="product-card__placeholder" aria-hidden="true">
+              🍽️
+            </div>
+          }
+        />
       </div>
 
       <div className="product-card__footer">
@@ -81,27 +79,17 @@ export default function WaiterProductCard({ product }: Props) {
         Expandable quantity pill.
         flex-direction: row-reverse → DOM order [+][count][-/trash]
         renders visually as [-/trash][count][+], anchored to right edge.
-        overflow:hidden + width transition reveals items from right to left.
       */}
       <div
         className={`qty-pill${count > 0 ? " qty-pill--active" : ""}`}
         aria-label={`Quantity: ${count}`}
       >
-        {/* Rightmost: + */}
-        <button
-          className="qty-pill__btn"
-          onClick={increment}
-          aria-label="Add one"
-        >
+        <button className="qty-pill__btn" onClick={increment} aria-label="Add one">
           +
         </button>
-
-        {/* Middle: count */}
         <span className="qty-pill__count" aria-live="polite">
           {count > 0 ? count : ""}
         </span>
-
-        {/* Leftmost: − or trash */}
         <button
           className="qty-pill__btn"
           onClick={decrement}

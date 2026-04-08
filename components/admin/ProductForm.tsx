@@ -31,6 +31,10 @@ export default function ProductForm({
   const isEdit = !!editTarget;
 
   const [name, setName] = useState(editTarget?.name ?? "");
+  const [description, setDescription] = useState(editTarget?.description ?? "");
+  const [tagsInput, setTagsInput] = useState(
+    editTarget?.tags?.join(", ") ?? ""
+  );
   const [price, setPrice] = useState(
     editTarget ? String(editTarget.price) : ""
   );
@@ -46,6 +50,8 @@ export default function ProductForm({
   useEffect(() => {
     if (editTarget) {
       setName(editTarget.name);
+      setDescription(editTarget.description ?? "");
+      setTagsInput(editTarget.tags?.join(", ") ?? "");
       setPrice(String(editTarget.price));
       setCategoryId(editTarget.categoryId);
       setImageUrl(editTarget.image_url);
@@ -76,8 +82,15 @@ export default function ProductForm({
 
     setSubmitting(true);
 
+    const tags = tagsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     const payload = {
       name: name.trim(),
+      description: description.trim(),
+      tags,
       image_url: imageUrl,
       price: parseFloat(parseFloat(price).toFixed(2)),
       categoryId,
@@ -122,6 +135,39 @@ export default function ProductForm({
             autoComplete="off"
           />
           {errors.name && <p className="form-error">{errors.name}</p>}
+        </div>
+
+        {/* Description */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="product-description">
+            Description
+          </label>
+          <textarea
+            id="product-description"
+            className="form-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Short description of the product"
+            rows={3}
+            maxLength={500}
+          />
+        </div>
+
+        {/* Tags */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="product-tags">
+            Tags
+          </label>
+          <input
+            id="product-tags"
+            type="text"
+            className="form-input"
+            value={tagsInput}
+            onChange={(e) => setTagsInput(e.target.value)}
+            placeholder="e.g. vegan, spicy, gluten-free"
+            autoComplete="off"
+          />
+          <p className="form-hint">Separate tags with commas.</p>
         </div>
 
         {/* Price */}

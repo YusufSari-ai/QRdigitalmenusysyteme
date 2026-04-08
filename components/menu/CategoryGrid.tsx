@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { getMenuData } from "@/lib/queries";
+import MenuImage from "@/components/ui/MenuImage";
 import type { CategoryWithProducts } from "@/types/category";
 import MenuHeader from "./MenuHeader";
 import ErrorBanner from "./ErrorBanner";
@@ -81,26 +81,25 @@ export default function CategoryGrid() {
               <Link
                 key={cat.id}
                 href={categoryHref(cat.id)}
-                className="category-card"
+                className={`category-card${cat.card_type === "horizontal" ? " category-card--horizontal" : ""}`}
               >
                 <div className="category-card__image-wrap">
-                  {cat.image_url ? (
-                    <Image
-                      src={cat.image_url}
-                      alt={cat.name}
-                      fill
-                      sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, 33vw"
-                      className="category-card__image"
-                      style={{ objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div
-                      className="category-card__placeholder"
-                      aria-hidden="true"
-                    >
-                      🍴
-                    </div>
-                  )}
+                  <MenuImage
+                    src={cat.image_url}
+                    alt={cat.name}
+                    fill
+                    sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, 33vw"
+                    className="category-card__image"
+                    style={{ objectFit: "cover" }}
+                    fallback={
+                      <div
+                        className="category-card__placeholder"
+                        aria-hidden="true"
+                      >
+                        🍴
+                      </div>
+                    }
+                  />
                 </div>
                 <div className="category-card__overlay">
                   <span className="category-card__name">{cat.name}</span>

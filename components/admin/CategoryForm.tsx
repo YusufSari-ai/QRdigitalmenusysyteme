@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import ImageUploader from "./ImageUploader";
 import { adminCreateCategory, adminUpdateCategory } from "@/lib/queries";
-import type { Category } from "@/types/category";
+import type { Category, CardType } from "@/types/category";
 
 interface CategoryFormProps {
   editTarget?: Category | null;
@@ -30,6 +30,9 @@ export default function CategoryForm({
   const [orderIndex, setOrderIndex] = useState(
     editTarget?.orderIndex ?? nextOrderIndex
   );
+  const [cardType, setCardType] = useState<CardType>(
+    editTarget?.card_type ?? "vertical"
+  );
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -40,6 +43,7 @@ export default function CategoryForm({
       setName(editTarget.name);
       setImageUrl(editTarget.image_url);
       setOrderIndex(editTarget.orderIndex);
+      setCardType(editTarget.card_type ?? "vertical");
     }
   }, [editTarget]);
 
@@ -64,6 +68,7 @@ export default function CategoryForm({
       name: name.trim(),
       image_url: imageUrl,
       orderIndex,
+      card_type: cardType,
     };
 
     const { error } = isEdit
@@ -120,6 +125,23 @@ export default function CategoryForm({
             min={0}
           />
           <p className="form-hint">Lower numbers appear first.</p>
+        </div>
+
+        {/* Card Type */}
+        <div className="form-group">
+          <label className="form-label" htmlFor="category-card-type">
+            Card Style
+          </label>
+          <select
+            id="category-card-type"
+            className="form-input"
+            value={cardType}
+            onChange={(e) => setCardType(e.target.value as CardType)}
+          >
+            <option value="vertical">Vertical</option>
+            <option value="horizontal">Horizontal</option>
+          </select>
+          <p className="form-hint">Controls how this category appears in the menu grid.</p>
         </div>
 
         {/* Image */}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import FeedbackModal from "./FeedbackModal";
 
 // Inline SVG: chat bubble (Feather Icons, MIT)
@@ -23,24 +24,60 @@ function ChatIcon() {
   );
 }
 
-export default function MenuHeader() {
+// Inline SVG: left arrow chevron (Feather Icons, MIT)
+function ChevronLeftIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+interface MenuHeaderProps {
+  /** When provided, renders a back button in the top-left that navigates to this href. */
+  backHref?: string;
+}
+
+export default function MenuHeader({ backHref }: MenuHeaderProps = {}) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const router = useRouter();
 
   return (
     <>
       <header className="menu-header">
-        {/* Left spacer — balances the right-side button so brand stays centered */}
-        <div className="menu-header__side" aria-hidden="true" />
+        {/* Left slot — back button when backHref is set, spacer otherwise */}
+        <div className="menu-header__side">
+          {backHref && (
+            <button
+              className="menu-header__feedback-btn"
+              onClick={() => router.push(backHref)}
+              aria-label="Back to menu"
+            >
+              <ChevronLeftIcon />
+            </button>
+          )}
+        </div>
 
         {/* Center brand */}
         <div className="menu-header__brand">
           <Image
-            src="/logo.png"
+            src="/logo.jpeg"
             alt="Tart Cafe logo"
             width={44}
             height={44}
             className="menu-header__brand-logo"
             priority
+            unoptimized
           />
           <span className="menu-header__logo">Tart Cafe</span>
         </div>

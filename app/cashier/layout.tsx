@@ -10,5 +10,6 @@ export default async function CashierRouteLayout({
   if (!allowed) {
     redirect("/login?error=unauthorized");
   }
-  return <>{children}</>;
+
+  return <div className="page-bg">{children}</div>;
 }

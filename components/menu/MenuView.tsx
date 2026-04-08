@@ -13,8 +13,8 @@ import EmptyState from "@/components/ui/EmptyState";
 
 export default function MenuView() {
   const searchParams = useSearchParams();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const tableId = searchParams.get("table"); // stored silently, not rendered
+  const tableId = searchParams.get("table"); // preserved when navigating back
+  const backHref = tableId ? `/menu?table=${tableId}` : "/menu";
   const scrollTo = searchParams.get("scrollTo");
 
   const [categories, setCategories] = useState<CategoryWithProducts[]>([]);
@@ -101,7 +101,7 @@ export default function MenuView() {
   if (loading) {
     return (
       <div className="menu-root">
-        <MenuHeader />
+        <MenuHeader backHref={backHref} />
         <SkeletonLoader />
       </div>
     );
@@ -110,7 +110,7 @@ export default function MenuView() {
   if (error) {
     return (
       <div className="menu-root">
-        <MenuHeader />
+        <MenuHeader backHref={backHref} />
         <div style={{ padding: "var(--sp-4)" }}>
           <ErrorBanner message={error} onRetry={fetchMenu} />
         </div>
@@ -121,7 +121,7 @@ export default function MenuView() {
   if (categories.length === 0) {
     return (
       <div className="menu-root">
-        <MenuHeader />
+        <MenuHeader backHref={backHref} />
         <EmptyState />
       </div>
     );
@@ -129,7 +129,7 @@ export default function MenuView() {
 
   return (
     <div className="menu-root">
-      <MenuHeader />
+      <MenuHeader backHref={backHref} />
 
       <CategoryChips
         categories={categories}

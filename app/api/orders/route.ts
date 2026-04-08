@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   // ── 2. Validate table ──────────────────────────────────────────────────────
   const { data: table, error: tableError } = await supabase
     .from("tables")
-    .select("id, is_active")
+    .select("id, status")
     .eq("id", table_id)
     .single();
 
@@ -71,10 +71,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Table not found." }, { status: 404 });
   }
 
-  if (!table.is_active) {
+  if (table.status !== "available") {
     return NextResponse.json(
-      { error: "Table is not active." },
-      { status: 422 }
+      { error: "Table is not available." },
+      { status: 409 }
     );
   }
 
@@ -147,8 +147,12 @@ export async function POST(req: NextRequest) {
     .insert(orderItems);
 
   if (itemsError) {
+    console.error("[POST /api/orders] Failed to insert order_items for order", order.id, ":", itemsError.message);
     // Best-effort rollback: delete the orphaned order
-    await supabase.from("orders").delete().eq("id", order.id);
+    const { error: rollbackError } = await supabase.from("orders").delete().eq("id", order.id);
+    if (rollbackError) {
+      console.error("[POST /api/orders] Rollback failed — orphaned order:", order.id, rollbackError.message);
+    }
     return NextResponse.json(
       { error: "Failed to create order items.", detail: itemsError.message },
       { status: 500 }

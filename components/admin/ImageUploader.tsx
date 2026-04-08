@@ -6,6 +6,60 @@ import { uploadMenuImage, MAX_IMAGE_BYTES } from "@/lib/queries";
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_EXTENSIONS = ".jpg, .jpeg, .png, .webp";
 
+const OPTIMIZE_TARGET = 480; // px — output is always a square WebP
+const OPTIMIZE_QUALITY = 0.75;
+
+/**
+ * Resize + center-crop to OPTIMIZE_TARGET × OPTIMIZE_TARGET and convert to WebP.
+ * Uses only the browser Canvas API — no external libraries.
+ *
+ * Crop logic:
+ *   cropSize = min(naturalWidth, naturalHeight)   ← largest centered square
+ *   sx = (naturalWidth  - cropSize) / 2           ← center horizontally
+ *   sy = (naturalHeight - cropSize) / 2           ← center vertically
+ *   drawImage reads that square and scales it to fill the canvas.
+ */
+function optimizeImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const blobUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+
+      const { naturalWidth: sw, naturalHeight: sh } = img;
+      const cropSize = Math.min(sw, sh);
+      const sx = (sw - cropSize) / 2;
+      const sy = (sh - cropSize) / 2;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = OPTIMIZE_TARGET;
+      canvas.height = OPTIMIZE_TARGET;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas 2D context unavailable"));
+
+      ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, OPTIMIZE_TARGET, OPTIMIZE_TARGET);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return reject(new Error("canvas.toBlob failed"));
+          resolve(new File([blob], "image.webp", { type: "image/webp" }));
+        },
+        "image/webp",
+        OPTIMIZE_QUALITY
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error("Failed to load image for optimization"));
+    };
+
+    img.src = blobUrl;
+  });
+}
+
 interface ImageUploaderProps {
   folder: "categories" | "products";
   initialUrl?: string;
@@ -47,12 +101,19 @@ export default function ImageUploader({
       return;
     }
 
-    // Show a temporary blob preview while uploading
+    // Show a temporary blob preview while uploading (original file — appears instantly)
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     setUploading(true);
 
-    const { url, error: err } = await uploadMenuImage(file, folder);
+    let fileToUpload: File;
+    try {
+      fileToUpload = await optimizeImage(file);
+    } catch {
+      fileToUpload = file; // optimization failed — fall back to original
+    }
+
+    const { url, error: err } = await uploadMenuImage(fileToUpload, folder);
 
     setUploading(false);
 
