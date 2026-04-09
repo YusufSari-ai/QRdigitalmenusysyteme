@@ -677,7 +677,27 @@ export async function adminCreateCategory(payload: {
   orderIndex: number;
   card_type: "vertical" | "horizontal";
 }): Promise<{ error: Error | null }> {
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/categories", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to create category") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }
 
 export async function adminUpdateCategory(
@@ -689,16 +709,53 @@ export async function adminUpdateCategory(
     card_type: "vertical" | "horizontal";
   }>
 ): Promise<{ error: Error | null }> {
-  void id;
-  void payload;
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/categories", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id, ...payload }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to update category") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }
 
 export async function adminDeleteCategory(
   id: string
 ): Promise<{ error: Error | null }> {
-  void id;
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/categories", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to delete category") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }
 
 export async function adminCreateProduct(payload: {
@@ -710,8 +767,27 @@ export async function adminCreateProduct(payload: {
   categoryId: string;
   orderIndex: number;
 }): Promise<{ error: Error | null }> {
-  void payload;
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/products", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to create product") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }
 
 export async function adminUpdateProduct(
@@ -726,14 +802,51 @@ export async function adminUpdateProduct(
     orderIndex: number;
   }>
 ): Promise<{ error: Error | null }> {
-  void id;
-  void payload;
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/products", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id, ...payload }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to update product") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }
 
 export async function adminDeleteProduct(
   id: string
 ): Promise<{ error: Error | null }> {
-  void id;
-  return { error: null };
+  try {
+    const res = await fetch("/api/admin/products", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { error: new Error(json?.error || "Failed to delete product") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error : new Error("Unknown error"),
+    };
+  }
 }

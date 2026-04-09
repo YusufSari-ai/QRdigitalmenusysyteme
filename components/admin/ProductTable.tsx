@@ -37,7 +37,7 @@ export default function ProductTable({
         <EmptyState
           title="No products yet"
           subtitle="Add your first product to start populating the menu."
-          icon="🍽️"
+          icon="��️"
         />
       </div>
     );

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import CategoryTable from "@/components/admin/CategoryTable";
 import CategoryForm from "@/components/admin/CategoryForm";
+import CategoryTable from "@/components/admin/CategoryTable";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
-import { adminGetCategories, adminDeleteCategory } from "@/lib/queries";
+import { adminDeleteCategory, adminGetCategories } from "@/lib/queries";
 import type { Category } from "@/types/category";
 
 type View = "list" | "create" | "edit";
@@ -50,10 +50,12 @@ export default function CategoriesPage() {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
+
     setDeleting(true);
     const { error } = await adminDeleteCategory(deleteTarget.id);
     setDeleting(false);
     setDeleteTarget(null);
+
     if (error) {
       showAlert("error", error.message);
     } else {
@@ -69,7 +71,6 @@ export default function CategoriesPage() {
 
   return (
     <AdminLayout title="Categories">
-      {/* Confirm delete dialog */}
       {deleteTarget && (
         <ConfirmDialog
           title="Delete category?"
