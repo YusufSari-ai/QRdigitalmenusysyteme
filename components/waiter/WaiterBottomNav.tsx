@@ -46,7 +46,7 @@ export default function WaiterBottomNav({ activeTab, onTabChange }: Props) {
       >
         <HomeIcon active={activeTab === "home"} />
         <span style={{ ...styles.label, color: activeTab === "home" ? "#d4a847" : "rgba(255,255,255,0.45)" }}>
-          Home
+          Ana Sayfa
         </span>
       </button>
 
@@ -62,7 +62,7 @@ export default function WaiterBottomNav({ activeTab, onTabChange }: Props) {
           )}
         </div>
         <span style={{ ...styles.label, color: activeTab === "cart" ? "#d4a847" : "rgba(255,255,255,0.45)" }}>
-          My Cart
+          Sepetim
         </span>
       </button>
     </nav>

@@ -77,7 +77,6 @@ export default function MenuHeader({ backHref }: MenuHeaderProps = {}) {
             height={44}
             className="menu-header__brand-logo"
             priority
-            unoptimized
           />
           <span className="menu-header__logo">Tart Cafe</span>
         </div>

@@ -60,7 +60,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="product-card__footer">
             <span className="product-card__price">{formatPrice(product.price)}</span>
             {inlineTag && (
-              <span className="product-card__tag product-card__tag--inline">
+              <span className="product-card__tag">
                 {inlineTag}
               </span>
             )}
@@ -72,22 +72,28 @@ export default function ProductCard({ product }: ProductCardProps) {
           <h3 className="product-card__back-name">{product.name}</h3>
 
           {product.description ? (
-            <p className="product-card__description">{product.description}</p>
+            <div className="product-card__description">
+              {product.description.split("\n").map((line, i) => {
+                const match = line.match(/^([^:]+:)(.*)/);
+                return (
+                  <p key={i} className="product-card__desc-line">
+                    {match ? (
+                      <>
+                        <span className={`product-card__desc-label${match[1].startsWith("Alerjen") ? " product-card__desc-label--alert" : ""}`}>{match[1]}</span>
+                        {match[2]}
+                      </>
+                    ) : line}
+                  </p>
+                );
+              })}
+            </div>
           ) : (
             <p className="product-card__description" style={{ fontStyle: "italic", opacity: 0.5 }}>
               No description available.
             </p>
           )}
 
-          {tags.length > 0 && (
-            <div className="product-card__tags">
-              {tags.map((tag) => (
-                <span key={tag} className="product-card__tag">{tag}</span>
-              ))}
-            </div>
-          )}
-
-          <div className="product-card__back-hint">tap to flip back</div>
+          <div className="product-card__back-hint">Kartı geri çevirmek için dokunun</div>
         </div>
 
       </div>

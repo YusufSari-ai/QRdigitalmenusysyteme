@@ -21,3 +21,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+*.sql
+*.tar.gz
+*.bak
+*.save

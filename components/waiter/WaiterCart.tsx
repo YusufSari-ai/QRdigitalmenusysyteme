@@ -23,8 +23,8 @@ export default function WaiterCart() {
   }, []);
 
   const handlePlaceOrder = async () => {
-    if (!tableId) { setError("Please select a table."); return; }
-    if (cartItems.length === 0) { setError("Cart is empty."); return; }
+    if (!tableId) { setError("Lütfen masa seçin."); return; }
+    if (cartItems.length === 0) { setError("Sepet boş."); return; }
 
     setPlacing(true);
     setError(null);
@@ -45,12 +45,12 @@ export default function WaiterCart() {
     return (
       <div style={styles.centered}>
         <div style={styles.successIcon}>✓</div>
-        <div style={styles.successText}>Order sent to kitchen!</div>
+        <div style={styles.successText}>Sipariş mutfağa gönderildi!</div>
         <button
           style={styles.newOrderBtn}
           onClick={() => setSuccess(false)}
         >
-          New Order
+          Yeni Şipariş
         </button>
       </div>
     );
@@ -58,22 +58,22 @@ export default function WaiterCart() {
 
   return (
     <div style={styles.root}>
-      <div style={styles.header}>My Cart</div>
+      <div style={styles.header}>Sepetim</div>
 
       {totalItems === 0 ? (
-        <div style={styles.empty}>No items added yet.</div>
+        <div style={styles.empty}>Henüz ürün eklenmedi.</div>
       ) : (
         <>
           {/* Table selector */}
           <div style={styles.section}>
-            <label style={styles.label} htmlFor="table-select">Table</label>
+            <label style={styles.label} htmlFor="table-select">Masa</label>
             <select
               id="table-select"
               value={tableId}
               onChange={(e) => setTableId(e.target.value)}
               style={styles.select}
             >
-              <option value="">— select table —</option>
+              <option value="">— masa seç —</option>
               {tables.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
@@ -90,14 +90,14 @@ export default function WaiterCart() {
             ))}
           </div>
 
-          {/* Order note */}
+          {/* Sipariş Notu */}
           <div style={styles.section}>
-            <label style={styles.label} htmlFor="order-note">Note (optional)</label>
+            <label style={styles.label} htmlFor="order-note">Not (İsteğe bağlı)</label>
             <textarea
               id="order-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. no onions, extra sauce…"
+              placeholder="örn. soğansız, ekstra soslu…"
               rows={3}
               style={styles.textarea}
             />
@@ -111,7 +111,7 @@ export default function WaiterCart() {
             onClick={handlePlaceOrder}
             disabled={placing}
           >
-            {placing ? "Sending…" : "Place Order"}
+            {placing ? "Gönderiliyor…" : "Siparişi Gönder"}
           </button>
         </>
       )}

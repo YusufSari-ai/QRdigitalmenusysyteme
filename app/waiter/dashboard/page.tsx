@@ -156,7 +156,7 @@ export default function WaiterDashboard() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search menu…"
+              placeholder="Menüde Ara…"
               aria-label="Search menu items"
               style={{
                 width: "100%",
