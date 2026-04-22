@@ -493,7 +493,7 @@ export async function removeCashierSelection(payload: {
     });
 
     const text = await res.text();
-    let json: any = null;
+    let json: { error?: string } | null = null;
 
     try {
       json = text ? JSON.parse(text) : null;
