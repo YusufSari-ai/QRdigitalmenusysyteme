@@ -51,14 +51,14 @@ export default function ProductsPage() {
   const handleCreateSuccess = async () => {
     await loadData();
     setView("list");
-    showAlert("success", "Product added successfully.");
+    showAlert("success", "Ürün başarıyla eklendi.");
   };
 
   const handleEditSuccess = async () => {
     await loadData();
     setView("list");
     setEditTarget(null);
-    showAlert("success", "Product updated successfully.");
+    showAlert("success", "Ürün başarıyla güncellendi.");
   };
 
   const handleDeleteConfirm = async () => {
@@ -71,7 +71,7 @@ export default function ProductsPage() {
       showAlert("error", error.message);
     } else {
       await loadData();
-      showAlert("success", "Product deleted.");
+      showAlert("success", "Ürün silindi.");
     }
   };
 
@@ -81,12 +81,12 @@ export default function ProductsPage() {
       : 0;
 
   return (
-    <AdminLayout title="Products">
+    <AdminLayout title="Ürünler">
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete product?"
-          message={`"${deleteTarget.name}" will be permanently deleted.`}
-          confirmLabel={deleting ? "Deleting…" : "Yes, delete"}
+          title="Ürün silinsin mi?"
+          message={`"${deleteTarget.name}" kalıcı olarak silinecek.`}
+          confirmLabel={deleting ? "Siliniyor…" : "Evet, sil"}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -96,15 +96,15 @@ export default function ProductsPage() {
         <div>
           <h2 className="admin-page-header__title">
             {view === "list"
-              ? "Products"
+              ? "Ürünler"
               : view === "create"
-              ? "New Product"
-              : "Edit Product"}
+                ? "Yeni Ürün"
+                : "Ürünü Düzenle"}
           </h2>
           <p className="admin-page-header__subtitle">
             {view === "list"
-              ? `${products.length} product${products.length === 1 ? "" : "s"}`
-              : "Fill in the product details below."}
+              ? `${products.length} ürün`
+              : "Aşağıdaki bilgileri doldurun."}
           </p>
         </div>
 
@@ -114,14 +114,15 @@ export default function ProductsPage() {
             onClick={() => setView("create")}
             id="add-product-btn"
           >
-            + Add Product
+            + Ürün Ekle
           </button>
         )}
       </div>
 
       {alert && (
         <div
-          className={`alert ${alert.type === "success" ? "alert-success" : "alert-error"}`}
+          className={`alert ${alert.type === "success" ? "alert-success" : "alert-error"
+            }`}
           role="alert"
           style={{ marginBottom: "var(--sp-4)" }}
         >
@@ -132,7 +133,7 @@ export default function ProductsPage() {
       {view === "list" && (
         <>
           {loading ? (
-            <p style={{ color: "var(--a-text-secondary)" }}>Loading…</p>
+            <p style={{ color: "var(--a-text-secondary)" }}>Yükleniyor…</p>
           ) : (
             <ProductTable
               products={products}

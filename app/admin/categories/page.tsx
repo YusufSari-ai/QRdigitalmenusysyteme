@@ -38,14 +38,14 @@ export default function CategoriesPage() {
   const handleCreateSuccess = async () => {
     await loadCategories();
     setView("list");
-    showAlert("success", "Category created successfully.");
+    showAlert("success", "Kategori başarıyla oluşturuldu.");
   };
 
   const handleEditSuccess = async () => {
     await loadCategories();
     setView("list");
     setEditTarget(null);
-    showAlert("success", "Category updated successfully.");
+    showAlert("success", "Kategori başarıyla güncellendi.");
   };
 
   const handleDeleteConfirm = async () => {
@@ -58,7 +58,7 @@ export default function CategoriesPage() {
       showAlert("error", error.message);
     } else {
       await loadCategories();
-      showAlert("success", "Category and its products were deleted.");
+      showAlert("success", "Kategori ve içindeki tüm ürünler silindi.");
     }
   };
 
@@ -68,13 +68,12 @@ export default function CategoriesPage() {
       : 0;
 
   return (
-    <AdminLayout title="Categories">
-      {/* Confirm delete dialog */}
+    <AdminLayout title="Kategoriler">
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete category?"
-          message={`"${deleteTarget.name}" and ALL its products will be permanently deleted. This cannot be undone.`}
-          confirmLabel={deleting ? "Deleting…" : "Yes, delete"}
+          title="Kategori silinsin mi?"
+          message={`"${deleteTarget.name}" ve bu kategoriye ait TÜM ürünler kalıcı olarak silinecek. Bu işlem geri alınamaz.`}
+          confirmLabel={deleting ? "Siliniyor…" : "Evet, sil"}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -84,15 +83,15 @@ export default function CategoriesPage() {
         <div>
           <h2 className="admin-page-header__title">
             {view === "list"
-              ? "Categories"
+              ? "Kategoriler"
               : view === "create"
-              ? "New Category"
-              : "Edit Category"}
+                ? "Yeni Kategori"
+                : "Kategoriyi Düzenle"}
           </h2>
           <p className="admin-page-header__subtitle">
             {view === "list"
-              ? `${categories.length} categor${categories.length === 1 ? "y" : "ies"}`
-              : "Fill in the details below."}
+              ? `${categories.length} kategori`
+              : "Aşağıdaki bilgileri doldurun."}
           </p>
         </div>
 
@@ -102,7 +101,7 @@ export default function CategoriesPage() {
             onClick={() => setView("create")}
             id="add-category-btn"
           >
-            + Add Category
+            + Kategori Ekle
           </button>
         )}
       </div>
@@ -120,7 +119,7 @@ export default function CategoriesPage() {
       {view === "list" && (
         <>
           {loading ? (
-            <p style={{ color: "var(--a-text-secondary)" }}>Loading…</p>
+            <p style={{ color: "var(--a-text-secondary)" }}>Yükleniyor…</p>
           ) : (
             <CategoryTable
               categories={categories}

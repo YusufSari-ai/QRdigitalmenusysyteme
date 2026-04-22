@@ -23,12 +23,12 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <AdminLayout title="Dashboard">
+    <AdminLayout title="Panel">
       <div className="admin-page-header">
         <div>
-          <h2 className="admin-page-header__title">Welcome back 👋</h2>
+          <h2 className="admin-page-header__title">Hoş geldin 👋</h2>
           <p className="admin-page-header__subtitle">
-            Here&rsquo;s a quick overview of your menu.
+            Menünüzün kısa bir özeti aşağıda yer alıyor.
           </p>
         </div>
       </div>
@@ -38,13 +38,14 @@ export default function AdminDashboard() {
           <div className="admin-stat-card__value">
             {loading ? "—" : categoryCount}
           </div>
-          <div className="admin-stat-card__label">Categories</div>
+          <div className="admin-stat-card__label">Kategoriler</div>
         </div>
+
         <div className="admin-stat-card">
           <div className="admin-stat-card__value">
             {loading ? "—" : productCount}
           </div>
-          <div className="admin-stat-card__label">Products</div>
+          <div className="admin-stat-card__label">Ürünler</div>
         </div>
       </div>
 
@@ -60,22 +61,25 @@ export default function AdminDashboard() {
             color: "var(--a-text)",
           }}
         >
-          Quick links
+          Hızlı İşlemler
         </h3>
+
         <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
           <a href="/admin/categories" className="btn btn-primary">
-            🗂️ Manage Categories
+            🗂️ Kategorileri Yönet
           </a>
+
           <a href="/admin/products" className="btn btn-ghost">
-            🍽️ Manage Products
+            🍽️ Ürünleri Yönet
           </a>
+
           <a
             href="/menu"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-ghost"
           >
-            👁️ Preview Menu
+            👁️ Menüyü Görüntüle
           </a>
         </div>
       </div>

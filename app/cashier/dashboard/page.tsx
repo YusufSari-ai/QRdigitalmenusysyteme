@@ -8,6 +8,7 @@ import {
   getPaidOrders,
   getPaidQuantityByOrderItemIds,
   settlePaymentSelection,
+  removeCashierSelection,
   getTables,
   type CashierOrder,
   type PaidOrder,
@@ -68,11 +69,17 @@ function getProductName(
 }
 
 function getOrderTotal(order: CashierOrder | PaidOrder): number {
-  return order.order_items.reduce((sum, item) => sum + (item.line_total ?? 0), 0);
+  return order.order_items.reduce(
+    (sum, item) => sum + Number(item.line_total ?? 0),
+    0
+  );
 }
 
 function getOrderItemCount(order: CashierOrder | PaidOrder): number {
-  return order.order_items.reduce((sum, item) => sum + item.quantity, 0);
+  return order.order_items.reduce(
+    (sum, item) => sum + Number(item.quantity ?? 0),
+    0
+  );
 }
 
 // Single source of truth for remaining-quantity arithmetic.
@@ -284,6 +291,8 @@ export default function CashierDashboard() {
 
   const [now, setNow] = useState(Date.now());
   const [isSettling, setIsSettling] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
@@ -563,8 +572,11 @@ export default function CashierDashboard() {
     const entries = Object.values(selection);
     return {
       itemCount: entries.length,
-      totalQty: entries.reduce((sum, e) => sum + e.qty, 0),
-      totalAmount: entries.reduce((sum, e) => sum + e.qty * e.unit_price, 0),
+      totalQty: entries.reduce((sum, e) => sum + Number(e.qty ?? 0), 0),
+      totalAmount: entries.reduce(
+        (sum, e) => sum + Number(e.qty ?? 0) * Number(e.unit_price ?? 0),
+        0
+      ),
     };
   }, [selection]);
 
@@ -645,603 +657,661 @@ export default function CashierDashboard() {
       setIsSettling(false);
     }
   };
+  const handleRemoveSelection = async () => {
+    if (!selectedTable || selectionSummary.itemCount === 0) return;
+
+
+    const orderedQtyById = new Map<number, number>();
+    for (const order of selectedTable.orders) {
+      for (const item of order.order_items) {
+        orderedQtyById.set(Number(item.id), item.quantity);
+      }
+    }
+
+    const safeItems: {
+      order_item_id: number;
+      quantity_remove: number;
+      order_id: string;
+    }[] = [];
+
+    for (const [itemIdStr, entry] of Object.entries(selection)) {
+      const itemId = Number(itemIdStr);
+      const ordered = orderedQtyById.get(itemId) ?? 0;
+      const paid = paidQtyMap[itemId] ?? 0;
+      const remaining = computeRemaining(ordered, paid);
+
+      const quantity_remove = Math.min(entry.qty, remaining);
+
+      if (quantity_remove > 0) {
+        safeItems.push({
+          order_item_id: itemId,
+          quantity_remove,
+          order_id: entry.order_id,
+        });
+      }
+    }
+
+    if (safeItems.length === 0) return;
+
+    setIsRemoving(true);
+    setError(null);
+
+    try {
+      const { error: removeErr } = await removeCashierSelection({
+        table_id: selectedTable.tableId,
+        items: safeItems,
+      });
+
+      if (removeErr) {
+        setError(removeErr.message);
+        return;
+      }
+
+      setSelection({});
+      await fetchCashierOrders();
+      await fetchPaidOrders();
+    } finally {
+      setIsRemoving(false);
+    }
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        background: "#f8fafc",
-        fontFamily:
-          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        color: "#0f172a",
-      }}
-    >
-      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <aside
+    <>
+      <div
         style={{
-          width: 260,
-          borderRight: "1px solid #e5e7eb",
-          background: "#ffffff",
+          minHeight: "100dvh",
           display: "flex",
-          flexDirection: "column",
-          padding: 18,
-          gap: 18,
+          background: "#f8fafc",
+          fontFamily:
+            'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          color: "#0f172a",
         }}
       >
-        <div>
-          <div
-            style={{ fontSize: "1.1rem", fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}
-          >
-            Cashier Panel
-          </div>
-          <div style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.4 }}>
-            Ödeme ve raporlama yönetimi
-          </div>
-        </div>
-
-        <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button
-            onClick={() => setActiveView("tables")}
-            style={{
-              textAlign: "left",
-              border: "1px solid",
-              borderColor: activeView === "tables" ? "#0f766e" : "#e5e7eb",
-              background: activeView === "tables" ? "#ccfbf1" : "#fff",
-              color: activeView === "tables" ? "#134e4a" : "#0f172a",
-              borderRadius: 12,
-              padding: "12px 14px",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.95rem",
-            }}
-          >
-            Masalar & Ödemeler
-          </button>
-
-          <button
-            onClick={() => setActiveView("reports")}
-            style={{
-              textAlign: "left",
-              border: "1px solid",
-              borderColor: activeView === "reports" ? "#0f766e" : "#e5e7eb",
-              background: activeView === "reports" ? "#ccfbf1" : "#fff",
-              color: activeView === "reports" ? "#134e4a" : "#0f172a",
-              borderRadius: 12,
-              padding: "12px 14px",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.95rem",
-            }}
-          >
-            Finansal Raporlar
-          </button>
-        </nav>
-
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-          <button
-            onClick={handleRefresh}
-            style={{
-              border: "1px solid #d1d5db",
-              background: "#fff",
-              color: "#111827",
-              borderRadius: 12,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-            }}
-          >
-            Yenile
-          </button>
-
-          <button
-            onClick={handleSignOut}
-            style={{
-              border: "1px solid #fecaca",
-              background: "#fff1f2",
-              color: "#b91c1c",
-              borderRadius: 12,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.9rem",
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Main content ──────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", minWidth: 0 }}>
-        {/* ── Center area ───────────────────────────────────────────────── */}
-        <main style={{ flex: 1, padding: 20, overflowY: "auto" }}>
-          {/* Page header */}
-          <div
-            style={{
-              marginBottom: 18,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 16,
-            }}
-          >
-            <div>
-              <h1
-                style={{ margin: 0, fontSize: "1.4rem", fontWeight: 800, color: "#111827" }}
-              >
-                {activeView === "tables" ? "Masalar & Ödemeler" : "Finansal Raporlar"}
-              </h1>
-              <div style={{ marginTop: 6, fontSize: "0.9rem", color: "#6b7280" }}>
-                {activeView === "tables"
-                  ? tableFilter === "waiting"
-                    ? `${displayedTables.length} masa, ${orders.length} bekleyen sipariş`
-                    : `${displayedTables.length} masa (${groupedTables.length} bekleyen)`
-                  : `${filteredPaidOrders.length} / ${paidOrders.length} ödenmiş sipariş (${REPORT_RANGE_LABELS[reportRange].toLowerCase()})`}
-              </div>
+        {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+        <aside
+          style={{
+            width: 260,
+            borderRight: "1px solid #e5e7eb",
+            background: "#ffffff",
+            display: "flex",
+            flexDirection: "column",
+            padding: 18,
+            gap: 18,
+          }}
+        >
+          <div>
+            <div
+              style={{ fontSize: "1.1rem", fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}
+            >
+              Cashier Panel
+            </div>
+            <div style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.4 }}>
+              Ödeme ve raporlama yönetimi
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div
+          <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              onClick={() => setActiveView("tables")}
               style={{
-                background: "#fef2f2",
-                border: "1px solid #fca5a5",
+                textAlign: "left",
+                border: "1px solid",
+                borderColor: activeView === "tables" ? "#0f766e" : "#e5e7eb",
+                background: activeView === "tables" ? "#ccfbf1" : "#fff",
+                color: activeView === "tables" ? "#134e4a" : "#0f172a",
                 borderRadius: 12,
-                padding: "14px 16px",
-                color: "#991b1b",
-                marginBottom: 16,
-                fontSize: "0.92rem",
+                padding: "12px 14px",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: "0.95rem",
               }}
             >
-              {error}
-            </div>
-          )}
+              Masalar & Ödemeler
+            </button>
 
-          {/* Loading */}
-          {loading && (
-            <div
-              style={{ textAlign: "center", color: "#6b7280", padding: "56px 0", fontSize: "0.95rem" }}
+            <button
+              onClick={() => setActiveView("reports")}
+              style={{
+                textAlign: "left",
+                border: "1px solid",
+                borderColor: activeView === "reports" ? "#0f766e" : "#e5e7eb",
+                background: activeView === "reports" ? "#ccfbf1" : "#fff",
+                color: activeView === "reports" ? "#134e4a" : "#0f172a",
+                borderRadius: 12,
+                padding: "12px 14px",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+              }}
             >
-              Veriler yükleniyor...
-            </div>
-          )}
+              Finansal Raporlar
+            </button>
+          </nav>
 
-          {/* Tables view */}
-          {!loading && activeView === "tables" && (
-            <>
-              {/* Filter toggle + search bar */}
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              onClick={handleRefresh}
+              style={{
+                border: "1px solid #d1d5db",
+                background: "#fff",
+                color: "#111827",
+                borderRadius: 12,
+                padding: "10px 14px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+              }}
+            >
+              Yenile
+            </button>
+
+            <button
+              onClick={handleSignOut}
+              style={{
+                border: "1px solid #fecaca",
+                background: "#fff1f2",
+                color: "#b91c1c",
+                borderRadius: 12,
+                padding: "10px 14px",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: "0.9rem",
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </aside>
+
+        {/* ── Main content ──────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, display: "flex", minWidth: 0 }}>
+          {/* ── Center area ───────────────────────────────────────────────── */}
+          <main style={{ flex: 1, padding: 20, overflowY: "auto" }}>
+            {/* Page header */}
+            <div
+              style={{
+                marginBottom: 18,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 16,
+              }}
+            >
+              <div>
+                <h1
+                  style={{ margin: 0, fontSize: "1.4rem", fontWeight: 800, color: "#111827" }}
+                >
+                  {activeView === "tables" ? "Masalar & Ödemeler" : "Finansal Raporlar"}
+                </h1>
+                <div style={{ marginTop: 6, fontSize: "0.9rem", color: "#6b7280" }}>
+                  {activeView === "tables"
+                    ? tableFilter === "waiting"
+                      ? `${displayedTables.length} masa, ${orders.length} bekleyen sipariş`
+                      : `${displayedTables.length} masa (${groupedTables.length} bekleyen)`
+                    : `${filteredPaidOrders.length} / ${paidOrders.length} ödenmiş sipariş (${REPORT_RANGE_LABELS[reportRange].toLowerCase()})`}
+                </div>
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
+                  background: "#fef2f2",
+                  border: "1px solid #fca5a5",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  color: "#991b1b",
                   marginBottom: 16,
-                  flexWrap: "wrap",
+                  fontSize: "0.92rem",
                 }}
               >
-                {/* Filter toggle */}
+                {error}
+              </div>
+            )}
+
+            {/* Loading */}
+            {loading && (
+              <div
+                style={{ textAlign: "center", color: "#6b7280", padding: "56px 0", fontSize: "0.95rem" }}
+              >
+                Veriler yükleniyor...
+              </div>
+            )}
+
+            {/* Tables view */}
+            {!loading && activeView === "tables" && (
+              <>
+                {/* Filter toggle + search bar */}
                 <div
                   style={{
                     display: "flex",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    flexShrink: 0,
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 16,
+                    flexWrap: "wrap",
                   }}
                 >
-                  {(["waiting", "all"] as TableFilter[]).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setTableFilter(f)}
-                      style={{
-                        padding: "7px 14px",
-                        border: "none",
-                        background: tableFilter === f ? "#0f766e" : "#fff",
-                        color: tableFilter === f ? "#fff" : "#374151",
-                        fontWeight: 600,
-                        fontSize: "0.84rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {f === "waiting" ? "Ödeme Bekleyen" : "Tüm Masalar"}
-                    </button>
-                  ))}
+                  {/* Filter toggle */}
+                  <div
+                    style={{
+                      display: "flex",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(["waiting", "all"] as TableFilter[]).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setTableFilter(f)}
+                        style={{
+                          padding: "7px 14px",
+                          border: "none",
+                          background: tableFilter === f ? "#0f766e" : "#fff",
+                          color: tableFilter === f ? "#fff" : "#374151",
+                          fontWeight: 600,
+                          fontSize: "0.84rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {f === "waiting" ? "Ödeme Bekleyen" : "Tüm Masalar"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search */}
+                  <input
+                    type="text"
+                    placeholder="Masa ara..."
+                    value={tableSearch}
+                    onChange={(e) => setTableSearch(e.target.value)}
+                    style={{
+                      flex: 1,
+                      minWidth: 140,
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: "7px 12px",
+                      fontSize: "0.9rem",
+                      outline: "none",
+                      background: "#fff",
+                    }}
+                  />
                 </div>
 
-                {/* Search */}
-                <input
-                  type="text"
-                  placeholder="Masa ara..."
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: 140,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 10,
-                    padding: "7px 12px",
-                    fontSize: "0.9rem",
-                    outline: "none",
-                    background: "#fff",
-                  }}
-                />
-              </div>
+                {displayedTables.length === 0 ? (
+                  <div
+                    style={{
+                      background: "#fff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 16,
+                      padding: "48px 24px",
+                      textAlign: "center",
+                      color: "#6b7280",
+                    }}
+                  >
+                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#374151" }}>
+                      {tableFilter === "waiting" ? "Bekleyen ödeme yok" : "Masa bulunamadı"}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: "0.92rem" }}>
+                      {tableFilter === "waiting"
+                        ? "Mutfaktan tamamlanan siparişler burada görünecektir."
+                        : "Arama kriterini değiştirmeyi deneyin."}
+                    </div>
+                  </div>
+                ) : (() => {
+                  const waitingEntries = displayedTables.filter((e) => e.kind === "waiting");
+                  const idleEntries = displayedTables.filter((e) => e.kind === "idle");
 
-              {displayedTables.length === 0 ? (
+                  const gridStyle: React.CSSProperties = {
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                    gap: 16,
+                  };
+
+                  const renderWaitingCard = (entry: Extract<DisplayTable, { kind: "waiting" }>) => {
+                    const { group } = entry;
+                    const isSelected = selectedTableId === group.tableId;
+                    const isOld = elapsedMs(group.oldestCreatedAt, now) > WARN_MS;
+
+                    return (
+                      <button
+                        key={group.tableId}
+                        onClick={() => setSelectedTableId(group.tableId)}
+                        style={{
+                          textAlign: "left",
+                          border: `2px solid ${isOld ? "#ef4444" : isSelected ? "#0f766e" : "#0d9488"}`,
+                          background: isOld ? "#fff" : isSelected ? "#f0fdf9" : "#f0fdf9",
+                          borderRadius: 16,
+                          padding: 16,
+                          cursor: "pointer",
+                          boxShadow: isOld
+                            ? "0 4px 20px rgba(239,68,68,.14)"
+                            : "0 4px 20px rgba(13,148,136,.12)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: 12,
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "2rem",
+                                fontWeight: 800,
+                                lineHeight: 1,
+                                color: isOld ? "#991b1b" : "#0f172a",
+                              }}
+                            >
+                              {group.tableName}
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: "0.82rem", color: "#6b7280" }}>
+                              {group.orderCount} sipariş
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                            <div
+                              style={{
+                                fontSize: "0.85rem",
+                                fontWeight: 700,
+                                color: isOld ? "#991b1b" : "#0f766e",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {formatElapsed(group.oldestCreatedAt, now)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 16,
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 12,
+                          }}
+                        >
+                          <div style={{ border: "1px solid #99f6e4", borderRadius: 12, padding: 12, background: "#fff" }}>
+                            <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
+                              Ürün adedi
+                            </div>
+                            <div style={{ fontWeight: 800, fontSize: "1rem" }}>{group.totalItems}</div>
+                          </div>
+
+                          <div style={{ border: "1px solid #99f6e4", borderRadius: 12, padding: 12, background: "#fff" }}>
+                            <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
+                              Toplam tutar
+                            </div>
+                            <div style={{ fontWeight: 800, fontSize: "1rem" }}>
+                              {formatCurrency(group.totalAmount)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{ marginTop: 14, fontSize: "0.84rem", fontWeight: 700, color: "#0f766e" }}
+                        >
+                          Detayı görüntüle →
+                        </div>
+                      </button>
+                    );
+                  };
+
+                  const renderIdleCard = (entry: Extract<DisplayTable, { kind: "idle" }>) => (
+                    <div
+                      key={entry.tableId}
+                      style={{
+                        textAlign: "left",
+                        border: "1px dashed #e2e8f0",
+                        background: "#fafafa",
+                        borderRadius: 16,
+                        padding: "14px 16px",
+                        opacity: 0.5,
+                      }}
+                    >
+                      <div style={{ fontSize: "1.6rem", fontWeight: 800, lineHeight: 1, color: "#cbd5e1" }}>
+                        {entry.tableName}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: "0.8rem", color: "#94a3b8" }}>
+                        Bekleyen sipariş yok
+                      </div>
+                    </div>
+                  );
+
+                  if (tableFilter === "waiting") {
+                    return (
+                      <div style={gridStyle}>
+                        {waitingEntries.map((e) => renderWaitingCard(e as Extract<DisplayTable, { kind: "waiting" }>))}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {waitingEntries.length > 0 && (
+                        <>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              color: "#0f766e",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              marginBottom: 12,
+                            }}
+                          >
+                            Ödeme Bekleyen Masalar ({waitingEntries.length})
+                          </div>
+                          <div style={{ ...gridStyle, marginBottom: idleEntries.length > 0 ? 28 : 0 }}>
+                            {waitingEntries.map((e) => renderWaitingCard(e as Extract<DisplayTable, { kind: "waiting" }>))}
+                          </div>
+                        </>
+                      )}
+                      {idleEntries.length > 0 && (
+                        <>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              color: "#94a3b8",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              marginBottom: 12,
+                            }}
+                          >
+                            Diğer Masalar ({idleEntries.length})
+                          </div>
+                          <div style={gridStyle}>
+                            {idleEntries.map((e) => renderIdleCard(e as Extract<DisplayTable, { kind: "idle" }>))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            )}
+
+            {/* Reports view
+              TODO(payment-reports): this entire section currently reads from
+              `paidOrders` (closed orders). Once `payments` / `payment_items`
+              data is available, migrate each sub-section as noted inline. */}
+            {!loading && activeView === "reports" && (
+              <>
+                {/* ── Range filter + export toolbar ── */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 18,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {/* Range tabs */}
+                  <div
+                    style={{
+                      display: "flex",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(Object.keys(REPORT_RANGE_LABELS) as ReportRange[]).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setReportRange(r)}
+                        style={{
+                          padding: "7px 14px",
+                          border: "none",
+                          background: reportRange === r ? "#0f766e" : "#fff",
+                          color: reportRange === r ? "#fff" : "#374151",
+                          fontWeight: 600,
+                          fontSize: "0.84rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {REPORT_RANGE_LABELS[r]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Spacer */}
+                  <div style={{ flex: 1 }} />
+
+                  {/* Export buttons */}
+                  <button
+                    onClick={() => exportReportPDF(filteredPaidOrders, reportRange)}
+                    disabled={filteredPaidOrders.length === 0}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      background: "#fff",
+                      color: "#374151",
+                      borderRadius: 10,
+                      padding: "7px 14px",
+                      cursor: filteredPaidOrders.length === 0 ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.84rem",
+                      opacity: filteredPaidOrders.length === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    PDF İndir
+                  </button>
+                  <button
+                    onClick={() => exportReportCSV(filteredPaidOrders, reportRange)}
+                    disabled={filteredPaidOrders.length === 0}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      background: "#fff",
+                      color: "#374151",
+                      borderRadius: 10,
+                      padding: "7px 14px",
+                      cursor: filteredPaidOrders.length === 0 ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.84rem",
+                      opacity: filteredPaidOrders.length === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    Excel İndir
+                  </button>
+                </div>
+
+                {/* ── Summary cards ── */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: 14,
+                    marginBottom: 18,
+                  }}
+                >
+                  <div
+                    style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
+                  >
+                    <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
+                      Toplam ciro
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
+                      {formatCurrency(reportSummary.totalRevenue)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
+                  >
+                    <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
+                      Ödenmiş sipariş
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
+                      {reportSummary.totalOrders}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
+                  >
+                    <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
+                      Ortalama fiş
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
+                      {formatCurrency(reportSummary.averageTicket)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Orders table ── */}
                 <div
                   style={{
                     background: "#fff",
                     border: "1px solid #e5e7eb",
                     borderRadius: 16,
-                    padding: "48px 24px",
-                    textAlign: "center",
-                    color: "#6b7280",
-                  }}
-                >
-                  <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#374151" }}>
-                    {tableFilter === "waiting" ? "Bekleyen ödeme yok" : "Masa bulunamadı"}
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: "0.92rem" }}>
-                    {tableFilter === "waiting"
-                      ? "Mutfaktan tamamlanan siparişler burada görünecektir."
-                      : "Arama kriterini değiştirmeyi deneyin."}
-                  </div>
-                </div>
-              ) : (() => {
-                const waitingEntries = displayedTables.filter((e) => e.kind === "waiting");
-                const idleEntries    = displayedTables.filter((e) => e.kind === "idle");
-
-                const gridStyle: React.CSSProperties = {
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                  gap: 16,
-                };
-
-                const renderWaitingCard = (entry: Extract<DisplayTable, { kind: "waiting" }>) => {
-                  const { group } = entry;
-                  const isSelected = selectedTableId === group.tableId;
-                  const isOld      = elapsedMs(group.oldestCreatedAt, now) > WARN_MS;
-
-                  return (
-                    <button
-                      key={group.tableId}
-                      onClick={() => setSelectedTableId(group.tableId)}
-                      style={{
-                        textAlign: "left",
-                        border: `2px solid ${isOld ? "#ef4444" : isSelected ? "#0f766e" : "#0d9488"}`,
-                        background: isOld ? "#fff" : isSelected ? "#f0fdf9" : "#f0fdf9",
-                        borderRadius: 16,
-                        padding: 16,
-                        cursor: "pointer",
-                        boxShadow: isOld
-                          ? "0 4px 20px rgba(239,68,68,.14)"
-                          : "0 4px 20px rgba(13,148,136,.12)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: 12,
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "2rem",
-                              fontWeight: 800,
-                              lineHeight: 1,
-                              color: isOld ? "#991b1b" : "#0f172a",
-                            }}
-                          >
-                            {group.tableName}
-                          </div>
-                          <div style={{ marginTop: 8, fontSize: "0.82rem", color: "#6b7280" }}>
-                            {group.orderCount} sipariş
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                          <div
-                            style={{
-                              fontSize: "0.85rem",
-                              fontWeight: 700,
-                              color: isOld ? "#991b1b" : "#0f766e",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {formatElapsed(group.oldestCreatedAt, now)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: 16,
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: 12,
-                        }}
-                      >
-                        <div style={{ border: "1px solid #99f6e4", borderRadius: 12, padding: 12, background: "#fff" }}>
-                          <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
-                            Ürün adedi
-                          </div>
-                          <div style={{ fontWeight: 800, fontSize: "1rem" }}>{group.totalItems}</div>
-                        </div>
-
-                        <div style={{ border: "1px solid #99f6e4", borderRadius: 12, padding: 12, background: "#fff" }}>
-                          <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
-                            Toplam tutar
-                          </div>
-                          <div style={{ fontWeight: 800, fontSize: "1rem" }}>
-                            {formatCurrency(group.totalAmount)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{ marginTop: 14, fontSize: "0.84rem", fontWeight: 700, color: "#0f766e" }}
-                      >
-                        Detayı görüntüle →
-                      </div>
-                    </button>
-                  );
-                };
-
-                const renderIdleCard = (entry: Extract<DisplayTable, { kind: "idle" }>) => (
-                  <div
-                    key={entry.tableId}
-                    style={{
-                      textAlign: "left",
-                      border: "1px dashed #e2e8f0",
-                      background: "#fafafa",
-                      borderRadius: 16,
-                      padding: "14px 16px",
-                      opacity: 0.5,
-                    }}
-                  >
-                    <div style={{ fontSize: "1.6rem", fontWeight: 800, lineHeight: 1, color: "#cbd5e1" }}>
-                      {entry.tableName}
-                    </div>
-                    <div style={{ marginTop: 8, fontSize: "0.8rem", color: "#94a3b8" }}>
-                      Bekleyen sipariş yok
-                    </div>
-                  </div>
-                );
-
-                if (tableFilter === "waiting") {
-                  return (
-                    <div style={gridStyle}>
-                      {waitingEntries.map((e) => renderWaitingCard(e as Extract<DisplayTable, { kind: "waiting" }>))}
-                    </div>
-                  );
-                }
-
-                return (
-                  <>
-                    {waitingEntries.length > 0 && (
-                      <>
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            fontWeight: 700,
-                            color: "#0f766e",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            marginBottom: 12,
-                          }}
-                        >
-                          Ödeme Bekleyen Masalar ({waitingEntries.length})
-                        </div>
-                        <div style={{ ...gridStyle, marginBottom: idleEntries.length > 0 ? 28 : 0 }}>
-                          {waitingEntries.map((e) => renderWaitingCard(e as Extract<DisplayTable, { kind: "waiting" }>))}
-                        </div>
-                      </>
-                    )}
-                    {idleEntries.length > 0 && (
-                      <>
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            fontWeight: 700,
-                            color: "#94a3b8",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            marginBottom: 12,
-                          }}
-                        >
-                          Diğer Masalar ({idleEntries.length})
-                        </div>
-                        <div style={gridStyle}>
-                          {idleEntries.map((e) => renderIdleCard(e as Extract<DisplayTable, { kind: "idle" }>))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </>
-          )}
-
-          {/* Reports view
-              TODO(payment-reports): this entire section currently reads from
-              `paidOrders` (closed orders). Once `payments` / `payment_items`
-              data is available, migrate each sub-section as noted inline. */}
-          {!loading && activeView === "reports" && (
-            <>
-              {/* ── Range filter + export toolbar ── */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  marginBottom: 18,
-                  flexWrap: "wrap",
-                }}
-              >
-                {/* Range tabs */}
-                <div
-                  style={{
-                    display: "flex",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 10,
                     overflow: "hidden",
-                    flexShrink: 0,
                   }}
                 >
-                  {(Object.keys(REPORT_RANGE_LABELS) as ReportRange[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setReportRange(r)}
-                      style={{
-                        padding: "7px 14px",
-                        border: "none",
-                        background: reportRange === r ? "#0f766e" : "#fff",
-                        color: reportRange === r ? "#fff" : "#374151",
-                        fontWeight: 600,
-                        fontSize: "0.84rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {REPORT_RANGE_LABELS[r]}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
-
-                {/* Export buttons */}
-                <button
-                  onClick={() => exportReportPDF(filteredPaidOrders, reportRange)}
-                  disabled={filteredPaidOrders.length === 0}
-                  style={{
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
-                    color: "#374151",
-                    borderRadius: 10,
-                    padding: "7px 14px",
-                    cursor: filteredPaidOrders.length === 0 ? "not-allowed" : "pointer",
-                    fontWeight: 600,
-                    fontSize: "0.84rem",
-                    opacity: filteredPaidOrders.length === 0 ? 0.5 : 1,
-                  }}
-                >
-                  PDF İndir
-                </button>
-                <button
-                  onClick={() => exportReportCSV(filteredPaidOrders, reportRange)}
-                  disabled={filteredPaidOrders.length === 0}
-                  style={{
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
-                    color: "#374151",
-                    borderRadius: 10,
-                    padding: "7px 14px",
-                    cursor: filteredPaidOrders.length === 0 ? "not-allowed" : "pointer",
-                    fontWeight: 600,
-                    fontSize: "0.84rem",
-                    opacity: filteredPaidOrders.length === 0 ? 0.5 : 1,
-                  }}
-                >
-                  Excel İndir
-                </button>
-              </div>
-
-              {/* ── Summary cards ── */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: 14,
-                  marginBottom: 18,
-                }}
-              >
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
-                >
-                  <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
-                    Toplam ciro
-                  </div>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
-                    {formatCurrency(reportSummary.totalRevenue)}
-                  </div>
-                </div>
-
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
-                >
-                  <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
-                    Ödenmiş sipariş
-                  </div>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
-                    {reportSummary.totalOrders}
-                  </div>
-                </div>
-
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 }}
-                >
-                  <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 6 }}>
-                    Ortalama fiş
-                  </div>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 800 }}>
-                    {formatCurrency(reportSummary.averageTicket)}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Orders table ── */}
-              <div
-                style={{
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 16,
-                  overflow: "hidden",
-                }}
-              >
-                {reportsLoading ? (
-                  <div style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
-                    Raporlar yükleniyor...
-                  </div>
-                ) : filteredPaidOrders.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
-                    {paidOrders.length === 0
-                      ? "Henüz ödenmiş sipariş bulunmuyor."
-                      : `${REPORT_RANGE_LABELS[reportRange]} döneminde kayıt bulunamadı.`}
-                  </div>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table
-                      style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}
-                    >
-                      <thead>
-                        <tr style={{ background: "#f8fafc", color: "#334155" }}>
-                          <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
-                            Masa
-                          </th>
-                          <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
-                            Ürün adedi
-                          </th>
-                          <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
-                            Açılış
-                          </th>
-                          <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
-                            Ödeme
-                          </th>
-                          <th style={{ textAlign: "right", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
-                            Tutar
-                          </th>
-                        </tr>
-                      </thead>
-                      {/* TODO(payment-reports): replace filteredPaidOrders.map with
+                  {reportsLoading ? (
+                    <div style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
+                      Raporlar yükleniyor...
+                    </div>
+                  ) : filteredPaidOrders.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
+                      {paidOrders.length === 0
+                        ? "Henüz ödenmiş sipariş bulunmuyor."
+                        : `${REPORT_RANGE_LABELS[reportRange]} döneminde kayıt bulunamadı.`}
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table
+                        style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}
+                      >
+                        <thead>
+                          <tr style={{ background: "#f8fafc", color: "#334155" }}>
+                            <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+                              Masa
+                            </th>
+                            <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+                              Ürün adedi
+                            </th>
+                            <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+                              Açılış
+                            </th>
+                            <th style={{ textAlign: "left", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+                              Ödeme
+                            </th>
+                            <th style={{ textAlign: "right", padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+                              Tutar
+                            </th>
+                          </tr>
+                        </thead>
+                        {/* TODO(payment-reports): replace filteredPaidOrders.map with
                           payments.map — each row should represent one payment
                           transaction. Columns to remap:
                             table name   → payment.table_id → tables.name (join)
@@ -1249,417 +1319,536 @@ export default function CashierDashboard() {
                             opened at    → the order's created_at (or drop column)
                             paid at      → payment.created_at
                             amount       → payment.amount  */}
-                      <tbody>
-                        {filteredPaidOrders.map((order) => (
-                          <tr key={order.id}>
-                            <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9", fontWeight: 700 }}>
-                              {getTableName(order.tables)}
-                            </td>
-                            <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
-                              {getOrderItemCount(order)}
-                            </td>
-                            <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
-                              {formatDateTime(order.created_at)}
-                            </td>
-                            <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
-                              {formatDateTime(order.closed_at)}
-                            </td>
-                            <td
-                              style={{
-                                padding: 14,
-                                borderBottom: "1px solid #f1f5f9",
-                                textAlign: "right",
-                                fontWeight: 800,
-                              }}
-                            >
-                              {formatCurrency(getOrderTotal(order))}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </main>
-
-        {/* ── Detail panel (item-based payment) ───────────────────────────── */}
-        {activeView === "tables" && selectedTable && (
-          <aside
-            style={{
-              width: 460,
-              borderLeft: "1px solid #e5e7eb",
-              background: "#ffffff",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-          >
-            {/* Panel header */}
-            <div style={{ padding: 18, borderBottom: "1px solid #e5e7eb" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: 12,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#111827" }}>
-                    Masa {selectedTable.tableName}
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: "0.88rem", color: "#6b7280" }}>
-                    {selectedTable.orderCount} bekleyen sipariş
-                  </div>
+                        <tbody>
+                          {filteredPaidOrders.map((order) => (
+                            <tr key={order.id}>
+                              <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9", fontWeight: 700 }}>
+                                {getTableName(order.tables)}
+                              </td>
+                              <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
+                                {getOrderItemCount(order)}
+                              </td>
+                              <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
+                                {formatDateTime(order.created_at)}
+                              </td>
+                              <td style={{ padding: 14, borderBottom: "1px solid #f1f5f9" }}>
+                                {formatDateTime(order.closed_at)}
+                              </td>
+                              <td
+                                style={{
+                                  padding: 14,
+                                  borderBottom: "1px solid #f1f5f9",
+                                  textAlign: "right",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {formatCurrency(getOrderTotal(order))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
+              </>
+            )}
+          </main>
 
-                <button
-                  onClick={() => setSelectedTableId(null)}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    background: "#fff",
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                >
-                  Kapat
-                </button>
-              </div>
-
-              {/* Summary stats */}
-              <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
-                    Ürün adedi
-                  </div>
-                  <div style={{ fontWeight: 800 }}>{selectedTable.totalItems}</div>
-                </div>
-
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
-                    Toplam tutar
-                  </div>
-                  <div style={{ fontWeight: 800 }}>
-                    {formatCurrency(selectedTable.totalAmount)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Selection action bar */}
-              <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-                <button
-                  onClick={handleSelectAllForTable}
-                  disabled={paidQtyLoading}
-                  style={{
-                    flex: 1,
-                    border: "1px solid #d1d5db",
-                    background: "#f8fafc",
-                    color: "#111827",
-                    borderRadius: 10,
-                    padding: "9px 10px",
-                    cursor: paidQtyLoading ? "not-allowed" : "pointer",
-                    fontWeight: 600,
-                    fontSize: "0.84rem",
-                    opacity: paidQtyLoading ? 0.6 : 1,
-                  }}
-                >
-                  Tümünü Seç
-                </button>
-                <button
-                  onClick={handleClearSelection}
-                  disabled={selectionSummary.itemCount === 0}
-                  style={{
-                    flex: 1,
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
-                    color: "#374151",
-                    borderRadius: 10,
-                    padding: "9px 10px",
-                    cursor: selectionSummary.itemCount === 0 ? "not-allowed" : "pointer",
-                    fontWeight: 600,
-                    fontSize: "0.84rem",
-                    opacity: selectionSummary.itemCount === 0 ? 0.5 : 1,
-                  }}
-                >
-                  Seçimi Temizle
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable items list */}
-            <div
+          {/* ── Detail panel (item-based payment) ───────────────────────────── */}
+          {activeView === "tables" && selectedTable && (
+            <aside
               style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: 18,
+                width: 460,
+                borderLeft: "1px solid #e5e7eb",
+                background: "#ffffff",
                 display: "flex",
                 flexDirection: "column",
-                gap: 14,
+                overflow: "hidden",
               }}
             >
-              {paidQtyLoading ? (
+              {/* Panel header */}
+              <div style={{ padding: 18, borderBottom: "1px solid #e5e7eb" }}>
                 <div
-                  style={{ textAlign: "center", color: "#6b7280", padding: "32px 0", fontSize: "0.9rem" }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 12,
+                  }}
                 >
-                  Ödeme bilgileri yükleniyor...
-                </div>
-              ) : (
-                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {selectedTable.orders.flatMap((order) =>
-                    order.order_items.map((item) => {
-                      const itemId = Number(item.id);
-                      const paidQty = paidQtyMap[itemId] ?? 0;
-                      const remaining = Math.max(0, item.quantity - paidQty);
-                      const currentQty = selection[itemId]?.qty ?? 0;
-                      const isFullyPaid = remaining === 0;
-
-                      return (
-                        <li
-                          key={item.id}
-                          style={{
-                            padding: "11px 0",
-                            borderBottom: "1px solid #f1f5f9",
-                            opacity: isFullyPaid ? 0.55 : 1,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            {/* Left: product info */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: "#111827",
-                                  fontSize: "0.92rem",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {getProductName(item.products)}
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 8,
-                                  marginTop: 4,
-                                  fontSize: "0.76rem",
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <span style={{ color: "#6b7280" }}>
-                                  {item.quantity} sipariş
-                                </span>
-                                <span style={{ color: "#10b981" }}>{paidQty} ödendi</span>
-                                <span style={{ color: remaining > 0 ? "#f59e0b" : "#6b7280" }}>
-                                  {remaining} kalan
-                                </span>
-                                <span style={{ color: "#6b7280" }}>
-                                  {formatCurrency(item.unit_price)} / adet
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Right: qty controls or paid badge */}
-                            {isFullyPaid ? (
-                              <div
-                                style={{
-                                  fontSize: "0.76rem",
-                                  fontWeight: 700,
-                                  color: "#10b981",
-                                  background: "#d1fae5",
-                                  borderRadius: 8,
-                                  padding: "4px 10px",
-                                  whiteSpace: "nowrap",
-                                  flexShrink: 0,
-                                }}
-                              >
-                                Ödendi
-                              </div>
-                            ) : (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                <button
-                                  onClick={() =>
-                                    decrementItem(itemId, item.quantity, item.unit_price, order.id)
-                                  }
-                                  disabled={currentQty === 0}
-                                  style={{
-                                    width: 28,
-                                    height: 28,
-                                    border: "1px solid #d1d5db",
-                                    background: "#fff",
-                                    borderRadius: 6,
-                                    cursor: currentQty === 0 ? "not-allowed" : "pointer",
-                                    fontWeight: 800,
-                                    fontSize: "1rem",
-                                    lineHeight: 1,
-                                    opacity: currentQty === 0 ? 0.35 : 1,
-                                  }}
-                                >
-                                  −
-                                </button>
-
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={remaining}
-                                  value={currentQty}
-                                  onChange={(e) =>
-                                    updateItemQty(
-                                      itemId,
-                                      parseInt(e.target.value, 10) || 0,
-                                      item.quantity,
-                                      item.unit_price,
-                                      order.id
-                                    )
-                                  }
-                                  style={{
-                                    width: 36,
-                                    textAlign: "center",
-                                    fontWeight: 700,
-                                    fontSize: "0.92rem",
-                                    color: currentQty > 0 ? "#0f766e" : "#9ca3af",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: 6,
-                                    padding: "2px 4px",
-                                    MozAppearance: "textfield",
-                                  }}
-                                />
-
-                                <button
-                                  onClick={() =>
-                                    incrementItem(itemId, item.quantity, item.unit_price, order.id)
-                                  }
-                                  disabled={currentQty >= remaining}
-                                  style={{
-                                    width: 28,
-                                    height: 28,
-                                    border: "1px solid #d1d5db",
-                                    background: "#fff",
-                                    borderRadius: 6,
-                                    cursor: currentQty >= remaining ? "not-allowed" : "pointer",
-                                    fontWeight: 800,
-                                    fontSize: "1rem",
-                                    lineHeight: 1,
-                                    opacity: currentQty >= remaining ? 0.35 : 1,
-                                  }}
-                                >
-                                  +
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    selectFullItem(itemId, item.quantity, item.unit_price, order.id)
-                                  }
-                                  disabled={paidQtyLoading}
-                                  style={{
-                                    border: "1px solid #d1d5db",
-                                    background: "#f8fafc",
-                                    color: "#374151",
-                                    borderRadius: 6,
-                                    padding: "4px 8px",
-                                    cursor: paidQtyLoading ? "not-allowed" : "pointer",
-                                    fontWeight: 600,
-                                    fontSize: "0.74rem",
-                                    whiteSpace: "nowrap",
-                                    opacity: paidQtyLoading ? 0.45 : 1,
-                                  }}
-                                >
-                                  Tümü
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })
-                  )}
-                </ul>
-              )}
-
-            {/* Payment summary + settle button */}
-            <div
-              style={{ padding: 18, borderTop: "1px solid #e5e7eb", background: "#f8fafc" }}
-            >
-              <div
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}
-              >
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}
-                >
-                  <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>
-                    Seçili ürün
+                  <div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#111827" }}>
+                      Masa {selectedTable.tableName}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: "0.88rem", color: "#6b7280" }}>
+                      {selectedTable.orderCount} bekleyen sipariş
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
-                    {selectionSummary.itemCount}
+
+                  <button
+                    onClick={() => setSelectedTableId(null)}
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      background: "#fff",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Kapat
+                  </button>
+                </div>
+
+                {/* Summary stats */}
+                <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
+                      Ürün adedi
+                    </div>
+                    <div style={{ fontWeight: 800 }}>{selectedTable.totalItems}</div>
+                  </div>
+
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: "0.78rem", color: "#6b7280", marginBottom: 4 }}>
+                      Toplam tutar
+                    </div>
+                    <div style={{ fontWeight: 800 }}>
+                      {formatCurrency(selectedTable.totalAmount)}
+                    </div>
                   </div>
                 </div>
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}
-                >
-                  <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>
-                    Seçili adet
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
-                    {selectionSummary.totalQty}
-                  </div>
-                </div>
-                <div
-                  style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}
-                >
-                  <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>Toplam</div>
-                  <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
-                    {formatCurrency(selectionSummary.totalAmount)}
-                  </div>
+
+                {/* Selection action bar */}
+                <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+                  <button
+                    onClick={handleSelectAllForTable}
+                    disabled={paidQtyLoading}
+                    style={{
+                      flex: 1,
+                      border: "1px solid #d1d5db",
+                      background: "#f8fafc",
+                      color: "#111827",
+                      borderRadius: 10,
+                      padding: "9px 10px",
+                      cursor: paidQtyLoading ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.84rem",
+                      opacity: paidQtyLoading ? 0.6 : 1,
+                    }}
+                  >
+                    Tümünü Seç
+                  </button>
+                  <button
+                    onClick={handleClearSelection}
+                    disabled={selectionSummary.itemCount === 0}
+                    style={{
+                      flex: 1,
+                      border: "1px solid #d1d5db",
+                      background: "#fff",
+                      color: "#374151",
+                      borderRadius: 10,
+                      padding: "9px 10px",
+                      cursor: selectionSummary.itemCount === 0 ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.84rem",
+                      opacity: selectionSummary.itemCount === 0 ? 0.5 : 1,
+                    }}
+                  >
+                    Seçimi Temizle
+                  </button>
                 </div>
               </div>
 
-              <button
-                onClick={handleSettle}
-                disabled={isSettling || selectionSummary.itemCount === 0}
+              {/* Scrollable items list */}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "14px",
-                  background:
-                    isSettling || selectionSummary.itemCount === 0 ? "#d1d5db" : "#0f766e",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 12,
-                  fontSize: "0.95rem",
-                  fontWeight: 800,
-                  cursor:
-                    isSettling || selectionSummary.itemCount === 0 ? "not-allowed" : "pointer",
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: 18,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
                 }}
               >
-                {isSettling
-                  ? "İşleniyor..."
-                  : selectionSummary.itemCount === 0
-                  ? "Ürün Seçin"
-                  : `Ödemeyi Tamamla — ${formatCurrency(selectionSummary.totalAmount)}`}
-              </button>
-            </div>
-            </div>
-          </aside>
-        )}
+                {paidQtyLoading ? (
+                  <div
+                    style={{ textAlign: "center", color: "#6b7280", padding: "32px 0", fontSize: "0.9rem" }}
+                  >
+                    Ödeme bilgileri yükleniyor...
+                  </div>
+                ) : (
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {selectedTable.orders.flatMap((order) =>
+                      order.order_items.map((item) => {
+                        const itemId = Number(item.id);
+                        const paidQty = paidQtyMap[itemId] ?? 0;
+                        const remaining = Math.max(0, item.quantity - paidQty);
+                        const currentQty = selection[itemId]?.qty ?? 0;
+                        const isFullyPaid = remaining === 0;
+
+                        return (
+                          <li
+                            key={item.id}
+                            style={{
+                              padding: "11px 0",
+                              borderBottom: "1px solid #f1f5f9",
+                              opacity: isFullyPaid ? 0.55 : 1,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: 10,
+                              }}
+                            >
+                              {/* Left: product info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontWeight: 700,
+                                    color: "#111827",
+                                    fontSize: "0.92rem",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {getProductName(item.products)}
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    marginTop: 4,
+                                    fontSize: "0.76rem",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <span style={{ color: "#6b7280" }}>
+                                    {item.quantity} sipariş
+                                  </span>
+                                  <span style={{ color: "#10b981" }}>{paidQty} ödendi</span>
+                                  <span style={{ color: remaining > 0 ? "#f59e0b" : "#6b7280" }}>
+                                    {remaining} kalan
+                                  </span>
+                                  <span style={{ color: "#6b7280" }}>
+                                    {formatCurrency(item.unit_price)} / adet
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Right: qty controls or paid badge */}
+                              {isFullyPaid ? (
+                                <div
+                                  style={{
+                                    fontSize: "0.76rem",
+                                    fontWeight: 700,
+                                    color: "#10b981",
+                                    background: "#d1fae5",
+                                    borderRadius: 8,
+                                    padding: "4px 10px",
+                                    whiteSpace: "nowrap",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  Ödendi
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <button
+                                    onClick={() =>
+                                      decrementItem(itemId, item.quantity, item.unit_price, order.id)
+                                    }
+                                    disabled={currentQty === 0}
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      border: "1px solid #d1d5db",
+                                      background: "#fff",
+                                      borderRadius: 6,
+                                      cursor: currentQty === 0 ? "not-allowed" : "pointer",
+                                      fontWeight: 800,
+                                      fontSize: "1rem",
+                                      lineHeight: 1,
+                                      opacity: currentQty === 0 ? 0.35 : 1,
+                                    }}
+                                  >
+                                    −
+                                  </button>
+
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={remaining}
+                                    value={currentQty}
+                                    onChange={(e) =>
+                                      updateItemQty(
+                                        itemId,
+                                        parseInt(e.target.value, 10) || 0,
+                                        item.quantity,
+                                        item.unit_price,
+                                        order.id
+                                      )
+                                    }
+                                    style={{
+                                      width: 36,
+                                      textAlign: "center",
+                                      fontWeight: 700,
+                                      fontSize: "0.92rem",
+                                      color: currentQty > 0 ? "#0f766e" : "#9ca3af",
+                                      border: "1px solid #d1d5db",
+                                      borderRadius: 6,
+                                      padding: "2px 4px",
+                                      MozAppearance: "textfield",
+                                    }}
+                                  />
+
+                                  <button
+                                    onClick={() =>
+                                      incrementItem(itemId, item.quantity, item.unit_price, order.id)
+                                    }
+                                    disabled={currentQty >= remaining}
+                                    style={{
+                                      width: 28,
+                                      height: 28,
+                                      border: "1px solid #d1d5db",
+                                      background: "#fff",
+                                      borderRadius: 6,
+                                      cursor: currentQty >= remaining ? "not-allowed" : "pointer",
+                                      fontWeight: 800,
+                                      fontSize: "1rem",
+                                      lineHeight: 1,
+                                      opacity: currentQty >= remaining ? 0.35 : 1,
+                                    }}
+                                  >
+                                    +
+                                  </button>
+
+                                  <button
+                                    onClick={() =>
+                                      selectFullItem(itemId, item.quantity, item.unit_price, order.id)
+                                    }
+                                    disabled={paidQtyLoading}
+                                    style={{
+                                      border: "1px solid #d1d5db",
+                                      background: "#f8fafc",
+                                      color: "#374151",
+                                      borderRadius: 6,
+                                      padding: "4px 8px",
+                                      cursor: paidQtyLoading ? "not-allowed" : "pointer",
+                                      fontWeight: 600,
+                                      fontSize: "0.74rem",
+                                      whiteSpace: "nowrap",
+                                      opacity: paidQtyLoading ? 0.45 : 1,
+                                    }}
+                                  >
+                                    Tümü
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                )}
+
+                {/* Payment summary + settle button */}
+                <div
+                  style={{ padding: 18, borderTop: "1px solid #e5e7eb", background: "#f8fafc" }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: 10,
+                      marginBottom: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>
+                        Seçili ürün
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+                        {selectionSummary.itemCount}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>
+                        Seçili adet
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+                        {selectionSummary.totalQty}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 3 }}>
+                        Toplam
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+                        {formatCurrency(selectionSummary.totalAmount)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {showRemoveConfirm && (
+                      <div
+                        style={{
+                          marginBottom: 10,
+                          border: "1px solid #fecaca",
+                          background: "#fff1f2",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            color: "#991b1b",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Seçili {selectionSummary.totalQty} adet ürün silinsin mi?
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowRemoveConfirm(false)}
+                            style={{
+                              flex: 1,
+                              padding: "9px 10px",
+                              border: "1px solid #d1d5db",
+                              background: "#fff",
+                              color: "#374151",
+                              borderRadius: 8,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              fontSize: "0.82rem",
+                            }}
+                          >
+                            Vazgeç
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await handleRemoveSelection();
+                              setShowRemoveConfirm(false);
+                            }}
+                            disabled={isRemoving}
+                            style={{
+                              flex: 1,
+                              padding: "9px 10px",
+                              border: "none",
+                              background: isRemoving ? "#fca5a5" : "#dc2626",
+                              color: "#fff",
+                              borderRadius: 8,
+                              fontWeight: 800,
+                              cursor: isRemoving ? "not-allowed" : "pointer",
+                              fontSize: "0.82rem",
+                            }}
+                          >
+                            {isRemoving ? "Siliniyor..." : "Evet, Sil"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowRemoveConfirm(true)}
+                      disabled={isRemoving || selectionSummary.itemCount === 0}
+                      style={{
+                        width: "100%",
+                        padding: "14px",
+                        background:
+                          isRemoving || selectionSummary.itemCount === 0 ? "#d1d5db" : "#dc2626",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 12,
+                        fontSize: "0.95rem",
+                        fontWeight: 800,
+                        cursor:
+                          isRemoving || selectionSummary.itemCount === 0 ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isRemoving
+                        ? "Siliniyor..."
+                        : selectionSummary.itemCount === 0
+                          ? "Ürün Seçin"
+                          : `Seçiliyi Sil`}
+                    </button>
+
+                    <button
+                      onClick={handleSettle}
+                      disabled={isSettling || selectionSummary.itemCount === 0 || isRemoving}
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        background:
+                          isSettling || selectionSummary.itemCount === 0 || isRemoving
+                            ? "#d1d5db"
+                            : "#0f766e",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 12,
+                        fontSize: "0.88rem",
+                        fontWeight: 800,
+                        cursor:
+                          isSettling || selectionSummary.itemCount === 0 || isRemoving
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {isSettling
+                        ? "İşleniyor..."
+                        : selectionSummary.itemCount === 0
+                          ? "Ürün Seçin"
+                          : `Ödemeyi Tamamla — ${formatCurrency(selectionSummary.totalAmount)}`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

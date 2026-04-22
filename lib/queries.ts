@@ -369,27 +369,27 @@ export async function getPaidOrders(): Promise<{
     for (const row of json.data) {
       if (!grouped[row.id]) {
         grouped[row.id] = {
-  id: row.id,
-  status: "paid",
-  created_at: row.created_at,
-  closed_at: row.closed_at,
-  is_paid: true,
-  table_id: row.table_id,
-  tables: { name: row.table_name },
-  order_items: [],
-};
+          id: row.id,
+          status: "paid",
+          created_at: row.created_at,
+          closed_at: row.closed_at,
+          is_paid: true,
+          table_id: row.table_id,
+          tables: { name: row.table_name },
+          order_items: [],
+        };
       }
 
       grouped[row.id].order_items.push({
-  id: row.order_item_id,
-  quantity: Number(row.quantity),
-  unit_price: Number(row.unit_price),
-  line_total: Number(row.line_total),
-  products: {
-    name: "Ödenen ürün",
-    price: Number(row.unit_price),
-  },
-});
+        id: row.order_item_id,
+        quantity: Number(row.quantity),
+        unit_price: Number(row.unit_price),
+        line_total: Number(row.line_total),
+        products: {
+          name: "Ödenen ürün",
+          price: Number(row.unit_price),
+        },
+      });
     }
 
     return {
@@ -473,6 +473,51 @@ export interface SettlePaymentPayload {
   payment_method: string | null;
   note: string | null;
   items: SettlePaymentSelectionItem[];
+}
+
+export async function removeCashierSelection(payload: {
+  table_id: string;
+  items: {
+    order_item_id: number;
+    quantity_remove: number;
+    order_id: string;
+  }[];
+}): Promise<{ error: Error | null }> {
+  try {
+    const res = await fetch("/api/cashier/remove-items", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    let json: any = null;
+
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      return {
+        error: new Error("Silme API cevabı geçersiz. Route hata veriyor olabilir."),
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        error: new Error(json?.error || "Ürün silme işlemi başarısız."),
+      };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error
+          : new Error("Ürün silme işlemi başarısız."),
+    };
+  }
 }
 
 // Returns a map of order_item_id → total paid quantity across all payments.

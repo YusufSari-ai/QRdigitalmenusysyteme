@@ -38,14 +38,33 @@ export default function FeedbackModal({ open, onClose }: Props) {
     }
   }, [open]);
 
-  const handleSubmit = () => {
-    console.log("[Feedback]", {
-      rating,
-      comment: comment.trim() || null,
-      timestamp: new Date().toISOString(),
-    });
-    setSubmitted(true);
-    setTimeout(() => onClose(), 1400);
+  const handleSubmit = async () => {
+    if (!rating) return;
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rating,
+          comment,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Gönderim başarısız.");
+      }
+
+      setSubmitted(true);
+      setTimeout(() => onClose(), 1400);
+    } catch (error) {
+      console.error("Feedback submit error:", error);
+      alert("Geri bildirim gönderilemedi.");
+    }
   };
 
   return (
@@ -84,6 +103,7 @@ export default function FeedbackModal({ open, onClose }: Props) {
               {(["👍", "😐", "👎"] as const).map((emoji) => (
                 <button
                   key={emoji}
+                  type="button"
                   className={`feedback-rating-btn${rating === emoji ? " selected" : ""}`}
                   onClick={() => setRating((prev) => (prev === emoji ? null : emoji))}
                   aria-pressed={rating === emoji}
@@ -105,10 +125,11 @@ export default function FeedbackModal({ open, onClose }: Props) {
 
             {/* Actions */}
             <div className="feedback-actions">
-              <button className="feedback-cancel" onClick={onClose}>
+              <button type="button" className="feedback-cancel" onClick={onClose}>
                 Vazgeç
               </button>
               <button
+                type="button"
                 className="feedback-submit"
                 onClick={handleSubmit}
                 disabled={rating === null}
